@@ -2182,7 +2182,7 @@ use SalesDB
 																		   | rows between 1 preceding and current row  --N-th preceding : the n-th row before the current row
 																		   | rows between unbounded preceding and 1 following 
 																		   | rows between 1 preceding and 1 following    --etc
-	
+			--p.s: running total & rolling total 110. onwards
 
 
 94.				select
@@ -2248,6 +2248,10 @@ use SalesDB
 
 -------------------------		WINDOW AGGREGATE FUNCTIONS		-------------------------------------------------------
 
+
+
+
+
 			--syntax: 
 				avg (sales) over () 
 				avg (sales) over ( partition by productid order by sales )
@@ -2256,6 +2260,17 @@ use SalesDB
 				--frame clause : optional
 
 
+
+			/*  types of aggregations :  (in context with whole section till the end of running * rolling total) 
+						
+						1. over all total : sum(sales) over()
+						2. total per groups : sum(sales) over( partition by .... ) 
+						3. running total : sum(sales) over( partition by .... order by .... rows between unbounded preceding and current row)
+															or
+											sum(sales) over( partition by .... )
+						4. rolling total : sum(sales) over( partition by .... order by .... rows between current row and 1 following )  
+					timestamp : 10:49:52	
+			*/
 
 
 
@@ -2481,8 +2496,101 @@ use SalesDB
 
 
 110.				--timestamp : 10:39:25
-			--running total: considers whole dataset
+			--running total: considers whole dataset( default , when not mentioning frame clause at all )
 			SUM(sales) over(  order by  month rows between unbounded preceding and current row ) 
 
 			--rolling total:  focused analysis
 			sum(sales) over( order by month rows between 2 preceding and current row)
+
+
+			--use case : Moving Average ---------------
+
+			/* find the moving average of sales for each product over time (instead of running average we call it moving average)*/
+
+111.					select 
+							orderid,
+							productid,
+							orderdate,
+							sales,
+				/*A*/		avg(sales) over(partition by productid) avgbyproduct, 
+				/*B*/		avg(sales) over(partition by productid order by orderdate ) movingavg 
+						from sales.orders					 
+
+			/* A :	1.each window is partitioned by each productid so avg of first productid 101 = 10+20+90+20/ 4 =35
+					2.next window in productid = 102 whose avg= 15+30+60/3 = 35
+					3.not exactly running total, as avg in each window is calculated in one go and pasted in allrows , hence the next line of code 
+			  
+			   B :  1. 'order by orderdate' is not just to sort them but to call default frame clause without writing it
+								*/
+
+
+			/* calculate the moving average of sales for each product over time , including only the next order */
+
+112.		select
+			orderid,
+			orderdate,
+			productid,
+			sales,
+			avg(sales) over( partition by productid order by orderdate rows between current row and 1 following ) avg_curr_nxt_row
+			from sales.orders
+
+			/* refer to the top till window basics to understand the types of aggregation.
+
+				types of aggregation ( purpose) :
+						1. overall total : overview of the entire data , it basically applies aggregate function on entire dataset at once 
+						2. total per group : compares categories , applies aggr. func. separately on windows created by partition constraint
+						3. running totl : progress over time , when the data of earlier rows are to be included in upcming aggr. then use it. 
+						4. rolling total : progress over time in specific fixed window    */
+
+
+						
+
+
+
+
+
+-----------------------------		WINDOW RANKING FUNCTIONS		--------------------------------------------------------------------------------------------------
+
+
+
+
+		/* types of ranking : 
+			1. Integer based ranking :  1, 2, 3, 4, 5..... discret values eg. find top 3 products - used in Top/Bottom N analysis
+						a. ROW_NUMBER()
+						b.	RANK()
+						c. DENSE_RANK()
+						d. NTILE()
+
+			2. percentage based ranking : always between 0 to 1 , continuous values eg. find the top 20% products - used in Distribution analysis
+						a. CUME_DIST()
+						b. PERCENT_RANK()
+		*/
+
+
+		----syntax	--------------------------*
+
+
+
+				RANK () OVER( PARTITION BY .... ORDER BY .... )
+				     ↑        \........./        \...../
+		            a.            ↑b.               ↑c.   
+
+
+		/*			a.expression must be empty except NTILE() which requires a number
+					b. partition by is optional 
+					c. orde by is compulsory     
+					d. frame clause is not allowed                          timestamp: 10:57:55    */
+
+
+
+
+					----------------		ROW_NUMBER()		---------------
+
+
+
+
+					/*		1. assign a unique number to each row 
+							2. it doesn't handle ties 
+					*/
+
+
